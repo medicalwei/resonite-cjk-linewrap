@@ -69,14 +69,14 @@ public class CJKLinewrap : ResoniteMod {
 		if (noEndsWith.IndexOf(ch1) >= 0) {
 			return false;
 		}
-		if (ch2 == '\n' || char.IsWhiteSpace(ch2) || ch2 == '\u200b') {
+		if (ch1 == '\n' || char.IsWhiteSpace(ch1) || ch1 == '\u200b') {
 			return true;
 		}
-		if (ch2 < 256) {
-			return ch1 >= 256; // allow line breaks if one of them is not from ascii...?
+		if (ch1 < 256) {
+			return ch2 >= 256; // XXX: allow line breaks if one of them is not from ascii. unsure whether that works in all CJK scenario, maybe it will break russians.
 		}
 		foreach (var range in ranges) {
-			if (ch2 >= range.FirstCodePoint && ch2 < range.FirstCodePoint + range.Length) {
+			if (ch1 >= range.FirstCodePoint && ch1 < range.FirstCodePoint + range.Length) {
 				return true;
 			}
 		}
@@ -111,8 +111,6 @@ public class CJKLinewrap : ResoniteMod {
 				blockLineBreakFrom = -1;
 			}
 			int i = 0;
-			char prevCh = '\0';
-			char ch = '\0';
 			while (i < segment.GlyphSegmentLength) {
 				int currentGlyphIndex = segment.GlyphSegmentOffset + i;
 				ref RenderGlyph glyph = ref segment.GetRenderGlyph(i);
@@ -132,10 +130,10 @@ public class CJKLinewrap : ResoniteMod {
 				} else {
 					glyphPositionOverride(ref glyph, in offset, currentLineIndex);
 				}
-				bool canBreakBefore = false;
+				bool canBreakAfter = false;
 				if (segment.HasCharacters) {
-					prevCh = ch;
-					ch = segment.GetCharacter(glyph.stringIndex);
+					char ch = segment.GetCharacter(glyph.stringIndex);
+					char ch2 = glyph.stringIndex+1 < segment.GlyphSegmentLength ? segment.GetCharacter(glyph.stringIndex+1) : '\0';
 					if (ch != '\t') {
 						if (ch == '\n') {
 							currentLineIndex++;
@@ -152,7 +150,7 @@ public class CJKLinewrap : ResoniteMod {
 						ptr.Translate(new float2(tabGlyphOffset, 0f));
 						offset += new float2(tabGlyphOffset, 0f);
 					}
-					canBreakBefore = AllowsLineBreak(testRanges, prevCh, ch);
+					canBreakAfter = AllowsLineBreak(testRanges, ch, ch2);
 					goto IL_0191;
 				}
 				goto IL_0191;
@@ -174,7 +172,7 @@ public class CJKLinewrap : ResoniteMod {
 							break;
 						}
 					}
-					if (breakCharacterIndex != currentGlyphIndex || !canBreakBefore) {
+					if (breakCharacterIndex != currentGlyphIndex || !canBreakAfter) {
 						float wrapOffset = -_glyphLayout[breakCharacterIndex].rect.x;
 						if (glyphPositionOverride == null) {
 							for (int k = breakCharacterIndex; k <= currentGlyphIndex; k++) {
