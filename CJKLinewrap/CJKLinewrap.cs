@@ -18,11 +18,11 @@ using static OfficialAssets.Graphics;
 namespace CJKLinewrap;
 //More info on creating mods can be found https://github.com/resonite-modding-group/ResoniteModLoader/wiki/Creating-Mods
 public class CJKLinewrap : ResoniteMod {
-	internal const string VERSION_CONSTANT = "0.0.1"; //Changing the version here updates it in all locations needed
+	internal const string VERSION_CONSTANT = "0.0.2"; //Changing the version here updates it in all locations needed
 	public override string Name => "CJKLinewrap";
 	public override string Author => "Meow Wei 魏喵";
 	public override string Version => VERSION_CONSTANT;
-	public override string Link => "https://github.com/resonite-modding-group/CJKLinewrap/";
+	public override string Link => "https://github.com/medicalwei/resonite-cjk-linewrap/";
 
 	private static readonly UnicodeRange[] testRanges = {
 		UnicodeRanges.HangulJamo,
@@ -165,14 +165,15 @@ public class CJKLinewrap : ResoniteMod {
 						breakStartSearch = blockLineBreakFrom - 1;
 					}
 					for (int j = breakStartSearch; j >= currentLineStart; j--) {
-						char ch1 = j-1>=currentLineStart?that.String[_glyphLayout[j-1].stringIndex]:'\0';
-						char ch2 = that.String[_glyphLayout[j].stringIndex];
+						char ch1 = that.String[_glyphLayout[j].stringIndex];
+						char ch2 = that.String[_glyphLayout[j+1].stringIndex];
 						if (AllowsLineBreak(testRanges, ch1, ch2)) {
-							breakCharacterIndex = j;
+							breakCharacterIndex = j+1;
 							break;
 						}
 					}
-					if (breakCharacterIndex != currentGlyphIndex || !canBreakAfter) {
+					// check if the breaking index is not a whitespace character
+					if (!Char.IsWhiteSpace(that.String[_glyphLayout[breakCharacterIndex].stringIndex])) {
 						float wrapOffset = -_glyphLayout[breakCharacterIndex].rect.x;
 						if (glyphPositionOverride == null) {
 							for (int k = breakCharacterIndex; k <= currentGlyphIndex; k++) {
