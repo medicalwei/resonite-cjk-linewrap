@@ -18,7 +18,7 @@ using static OfficialAssets.Graphics;
 namespace CJKLinewrap;
 //More info on creating mods can be found https://github.com/resonite-modding-group/ResoniteModLoader/wiki/Creating-Mods
 public class CJKLinewrap : ResoniteMod {
-	internal const string VERSION_CONSTANT = "0.1.1"; //Changing the version here updates it in all locations needed
+	internal const string VERSION_CONSTANT = "0.2.0"; //Changing the version here updates it in all locations needed
 	public override string Name => "CJKLinewrap";
 	public override string Author => "Meow Wei 魏喵";
 	public override string Version => VERSION_CONSTANT;
@@ -61,6 +61,18 @@ public class CJKLinewrap : ResoniteMod {
 			return false;
 		}
 	}
+
+	[HarmonyPatch(typeof(StringRenderTree), "ComputeMaxWordWidth")]
+	class StringRenderTree_ComputeMaxWordWidth_Patch {
+		static bool Prefix(
+			ref float __result,
+			StringRenderTree __instance
+		) {
+			__result = ComputeMaxWordWidth(__instance);
+			return false;
+		}
+	}
+
 
 	private static bool AllowsLineBreak(UnicodeRange[] ranges, char ch1, char ch2) {
 		if (noBeginsWith.IndexOf(ch2) >= 0) {
@@ -130,10 +142,8 @@ public class CJKLinewrap : ResoniteMod {
 				} else {
 					glyphPositionOverride(ref glyph, in offset, currentLineIndex);
 				}
-				bool canBreakAfter = false;
 				if (segment.HasCharacters) {
 					char ch = segment.GetCharacter(glyph.stringIndex);
-					char ch2 = glyph.stringIndex+1 < segment.GlyphSegmentLength ? segment.GetCharacter(glyph.stringIndex+1) : '\0';
 					if (ch != '\t') {
 						if (ch == '\n') {
 							currentLineIndex++;
@@ -150,7 +160,6 @@ public class CJKLinewrap : ResoniteMod {
 						ptr.Translate(new float2(tabGlyphOffset, 0f));
 						offset += new float2(tabGlyphOffset, 0f);
 					}
-					canBreakAfter = AllowsLineBreak(testRanges, ch, ch2);
 					goto IL_0191;
 				}
 				goto IL_0191;
@@ -158,7 +167,7 @@ public class CJKLinewrap : ResoniteMod {
 				i++;
 				continue;
 			IL_0191:
-				if (glyphPositionOverride == null && that.Bounded && ExceedsHorizontalBounds(that, ref glyph)) {
+				if (glyphPositionOverride == null && that.Bounded && ExceedsHorizontalBounds(ref that, ref glyph)) {
 					int breakCharacterIndex = currentGlyphIndex;
 					int breakStartSearch = currentGlyphIndex - 1;
 					if (blockLineBreakFrom >= 0) {
@@ -166,14 +175,15 @@ public class CJKLinewrap : ResoniteMod {
 					}
 					for (int j = breakStartSearch; j >= currentLineStart; j--) {
 						char ch1 = that.String[_glyphLayout[j].stringIndex];
-						char ch2 = that.String[_glyphLayout[j+1].stringIndex];
+						char ch2 = that.String[_glyphLayout[j + 1].stringIndex];
 						if (AllowsLineBreak(testRanges, ch1, ch2)) {
-							breakCharacterIndex = j+1;
+							breakCharacterIndex = j + 1;
 							break;
 						}
 					}
-					// check if the breaking index is not a whitespace character
-					if (!Char.IsWhiteSpace(that.String[_glyphLayout[breakCharacterIndex].stringIndex])) {
+					// check if we need to move non whitespace character
+					if (breakCharacterIndex < currentGlyphIndex ||
+						!Char.IsWhiteSpace(that.String[_glyphLayout[currentGlyphIndex].stringIndex])) {
 						float wrapOffset = -_glyphLayout[breakCharacterIndex].rect.x;
 						if (glyphPositionOverride == null) {
 							for (int k = breakCharacterIndex; k <= currentGlyphIndex; k++) {
@@ -199,7 +209,59 @@ public class CJKLinewrap : ResoniteMod {
 			_lines.Add(new StringLine());
 		}
 	}
-	private static bool ExceedsHorizontalBounds(StringRenderTree that, ref RenderGlyph glyph) {
+	private static bool ExceedsHorizontalBounds(ref StringRenderTree that, ref RenderGlyph glyph) {
 		return glyph.rect.xmax - that.BoundsSize.x > that.ActualSize * 0.001f;
+	}
+
+	public static float ComputeMaxWordWidth(StringRenderTree that) {
+		float maxWidth = 0f;
+		foreach (StringRenderGlyphSegmentNode segment in that) {
+			if (!segment.HasCharacters) {
+				continue;
+			}
+			if (segment.DisableLineBreaking()) {
+				continue;
+			}
+
+			int? currentStartGlyph = null;
+			int? currentEndGlyph = null;
+			for (int i = 0; i < segment.GlyphSegmentLength; i++) {
+				RenderGlyph glyph1 = segment.GetRenderGlyph(i);
+				char ch1 = segment.GetCharacter(glyph1.stringIndex);
+
+				char ch2 = '\0';
+				if (i + 1 < segment.GlyphSegmentLength) {
+					RenderGlyph glyph2 = segment.GetRenderGlyph(i + 1);
+					ch2 = segment.GetCharacter(glyph2.stringIndex);
+				}
+
+				if (!Char.IsWhiteSpace(ch1)) {
+					if (currentStartGlyph == null) {
+						currentStartGlyph = new int?(i);
+					}
+					currentEndGlyph = new int?(i);
+				}
+
+				if (AllowsLineBreak(testRanges, ch1, ch2)) {
+					UpdateMaxWordWidth(segment, ref maxWidth, currentStartGlyph, currentEndGlyph);
+					currentStartGlyph = null;
+					currentEndGlyph = null;
+				}
+			}
+			UpdateMaxWordWidth(segment, ref maxWidth, currentStartGlyph, currentEndGlyph);
+		}
+
+		return maxWidth;
+	}
+
+	private static void UpdateMaxWordWidth(StringRenderGlyphSegmentNode segment, ref float maxLength, int? startGlyph, int? endGlyph) {
+		if (startGlyph == null || endGlyph == null) {
+			return;
+		}
+		float startX = segment.GetRenderGlyph(startGlyph.Value).rect.xmin;
+		float length = segment.GetRenderGlyph(endGlyph.Value).rect.xmax - startX;
+		if (length > maxLength) {
+			maxLength = length;
+		}
 	}
 }
