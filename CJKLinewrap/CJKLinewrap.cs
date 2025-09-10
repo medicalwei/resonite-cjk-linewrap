@@ -18,7 +18,7 @@ using static OfficialAssets.Graphics;
 namespace CJKLinewrap;
 //More info on creating mods can be found https://github.com/resonite-modding-group/ResoniteModLoader/wiki/Creating-Mods
 public class CJKLinewrap : ResoniteMod {
-	internal const string VERSION_CONSTANT = "0.2.0"; //Changing the version here updates it in all locations needed
+	internal const string VERSION_CONSTANT = "0.2.1"; //Changing the version here updates it in all locations needed
 	public override string Name => "CJKLinewrap";
 	public override string Author => "Meow Wei 魏喵";
 	public override string Version => VERSION_CONSTANT;
@@ -219,9 +219,7 @@ public class CJKLinewrap : ResoniteMod {
 			if (!segment.HasCharacters) {
 				continue;
 			}
-			if (segment.DisableLineBreaking()) {
-				continue;
-			}
+			bool noBr = segment.DisableLineBreaking();
 
 			int? currentStartGlyph = null;
 			int? currentEndGlyph = null;
@@ -242,7 +240,7 @@ public class CJKLinewrap : ResoniteMod {
 					currentEndGlyph = new int?(i);
 				}
 
-				if (AllowsLineBreak(testRanges, ch1, ch2)) {
+				if (!noBr && AllowsLineBreak(testRanges, ch1, ch2)) {
 					UpdateMaxWordWidth(segment, ref maxWidth, currentStartGlyph, currentEndGlyph);
 					currentStartGlyph = null;
 					currentEndGlyph = null;
